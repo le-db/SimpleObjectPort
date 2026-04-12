@@ -49,7 +49,7 @@ namespace SimpleObjectPort.Editor
             exportButton = CreateUIElement<Button>(root, button =>
             {
                 button.text = "Export";
-                button.clicked += () => _ = HandleExport();
+                button.clicked += () => _ = HandleExportAsync();
                 if (objectValue == null)
                     button.SetEnabled(false);
             });
@@ -73,13 +73,13 @@ namespace SimpleObjectPort.Editor
             CreateUIElement<Button>(root, button =>
             {
                 button.text = "Import";
-                button.clicked += () => _ = HandleImport();
+                button.clicked += () => _ = HandleImportAsync();
             });
 
             #endregion import
         }
 
-        async UniTask HandleExport()
+        async UniTask HandleExportAsync()
         {
             if (!EditorUtility.DisplayDialog("Export Object", "This will create a file and open the explorer. Continue?", "Yes", "No"))
                 return;
@@ -101,7 +101,7 @@ namespace SimpleObjectPort.Editor
                 System.Diagnostics.Process.Start(Path.GetDirectoryName(savedFilePath));
         }
 
-        async UniTask HandleImport()
+        async UniTask HandleImportAsync()
         {
             if (!EditorUtility.DisplayDialog(
                 "Import Object",
@@ -151,9 +151,9 @@ namespace SimpleObjectPort.Editor
             EditorJsonUtility.FromJsonOverwrite(jsonContent, objectToOverwrite);
 
             var fileName = useJsonAssetNameToggle.value
-                ? Path.GetFileName(filePath)
-                : jsonRoot["m_Name"].ToString();
-            var targetPath = Path.Combine(customTargetPathField.value, $"{fileName}.asset");
+                ? jsonRoot["m_Name"].ToString()
+                : Path.GetFileName(filePath);
+            var targetPath = Path.Combine("Assets", customTargetPathField.value, $"{fileName}.asset");
             AssetDatabase.CreateAsset(objectToOverwrite, targetPath);
         }
 
