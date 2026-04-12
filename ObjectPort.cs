@@ -18,7 +18,7 @@ namespace SimpleObjectPort
         /// <returns>read bytes as UTF8 string</returns>
         public static async UniTask<string> Load(string filePath)
         {
-            var jsonByte = await File.ReadAllBytesAsync(filePath);
+            var jsonByte = await File.ReadAllBytesAsync(filePath).AsUniTask();
             return Encoding.UTF8.GetString(jsonByte);
         }
 
@@ -75,7 +75,7 @@ namespace SimpleObjectPort
                 = JsonUtility.ToJson(data, prettyPrint);
 #endif
             var jsonByte = Encoding.UTF8.GetBytes(jsonData);
-            await File.WriteAllBytesAsync(usedFilePath, jsonByte);
+            await File.WriteAllBytesAsync(usedFilePath, jsonByte).AsUniTask();
             return usedFilePath;
         }
     }
