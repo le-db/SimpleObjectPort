@@ -1,4 +1,7 @@
+using Cysharp.Threading.Tasks;
 using System.IO;
+using System.Linq;
+using Unity.Plastic.Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -8,12 +11,12 @@ namespace SimpleObjectPort.Editor
 {
     public class ObjectPortEditor : EditorWindow
     {
-        ObjectField objectField;
         Button exportButton;
-        Button importButton;
         Toggle explorerOnExportToggle;
+        Toggle useJsonAssetNameToggle;
+        TextField customTargetPathField;
 
-        ScriptableObject objectValue;
+        Object objectValue;
 
         [MenuItem("Window/SimpleObjectPort/ObjectPort")]
         public static void Entry()
@@ -31,25 +34,22 @@ namespace SimpleObjectPort.Editor
             CreateUIElement<Label>(root, (label)
                 => label.text = "\n<b>Export</b>\n");
 
-            objectField = CreateUIElement<ObjectField>(root, field =>
+            CreateUIElement<ObjectField>(root, field =>
             {
-                field.label = "ScriptableObject\n";
-                field.objectType = typeof(ScriptableObject);
-                objectField.RegisterValueChangedCallback(HandleObjectSelection);
+                field.label = "Object";
+                field.RegisterValueChangedCallback(HandleObjectSelection);
             });
 
             explorerOnExportToggle = CreateUIElement<Toggle>(root, toggle =>
             {
                 toggle.label = "Open system explorer after export";
-                //toggle.name = "toggleExplorer";
                 toggle.value = true;
             });
 
             exportButton = CreateUIElement<Button>(root, button =>
             {
                 button.text = "Export";
-                //button.name = "buttonExport";
-                button.clicked += ExportObject;
+                button.clicked += () => _ = HandleExport();
                 if (objectValue == null)
                     button.SetEnabled(false);
             });
@@ -62,16 +62,110 @@ namespace SimpleObjectPort.Editor
             CreateUIElement<Label>(root, (label)
                 => label.text = "\n<b>Import</b>\n");
 
-            importButton = CreateUIElement<Button>(root, button =>
+            useJsonAssetNameToggle = CreateUIElement<Toggle>(root, toggle =>
+            {
+                toggle.label = "Use m_Name inside JSON as asset name";
+                toggle.value = true;
+            });
+
+            customTargetPathField = CreateTextField(root, "Custom asset path");
+
+            CreateUIElement<Button>(root, button =>
             {
                 button.text = "Import";
-                //button.name = "buttonImport";
-                button.clicked += ImportObject;
-                //if (objectValue == null)
-                //    button.SetEnabled(false);
+                button.clicked += () => _ = HandleImport();
             });
 
             #endregion import
+        }
+
+        async UniTask HandleExport()
+        {
+            if (!EditorUtility.DisplayDialog("Export Object", "This will create a file and open the explorer. Continue?", "Yes", "No"))
+                return;
+
+            bool openFolderAfterSave = explorerOnExportToggle.value;
+
+            var savedFilePath = "";
+            try
+            {
+                savedFilePath = await ObjectPort.Save(objectValue, openFolderAfterSave: openFolderAfterSave);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Could not save file");
+                Debug.LogException(e);
+            }
+
+            if (openFolderAfterSave && !string.IsNullOrEmpty(savedFilePath))
+                System.Diagnostics.Process.Start(Path.GetDirectoryName(savedFilePath));
+        }
+
+        async UniTask HandleImport()
+        {
+            if (!EditorUtility.DisplayDialog(
+                "Import Object",
+                "This will prompt you to select a previously exported file and will then create an asset in the Asset/ directory. Continue?",
+                "Yes", "No"))
+            {
+                return;
+            }
+
+            var filePath = EditorUtility.OpenFilePanelWithFilters(
+                "Import Object",
+                directory: "",
+                new string[] { "JSON", "json", "All files", "*"});
+
+            string jsonContent;
+            JToken jsonRoot;
+            try
+            {
+                jsonContent = await ObjectPort.Load(filePath);
+                jsonRoot = jsonContent.Contains("MonoBehaviour")
+                    ? JObject.Parse(jsonContent)["MonoBehaviour"]
+                    : JObject.Parse(jsonContent).Root;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("Could not load selected file");
+                Debug.LogException(e);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(jsonContent))
+            {
+                Debug.LogWarning("Read file was empty");
+                return;
+            }
+
+            var className = jsonRoot["m_EditorClassIdentifier"].ToString()
+                .Split('.').Last();
+            if (string.IsNullOrEmpty(className))
+            {
+                Debug.LogWarning("Missing classname in read file");
+                return;
+            }
+            var objectToOverwrite = ScriptableObject.CreateInstance(className);
+
+            // this is what actually sets the data inside the object
+            EditorJsonUtility.FromJsonOverwrite(jsonContent, objectToOverwrite);
+
+            var fileName = useJsonAssetNameToggle.value
+                ? Path.GetFileName(filePath)
+                : jsonRoot["m_Name"].ToString();
+            var targetPath = Path.Combine(customTargetPathField.value, $"{fileName}.asset");
+            AssetDatabase.CreateAsset(objectToOverwrite, targetPath);
+        }
+
+        void HandleObjectSelection(ChangeEvent<Object> selectedEvent)
+        {
+            objectValue = selectedEvent.newValue;
+            if (objectValue == null)
+            {
+                exportButton.SetEnabled(false);
+                return;
+            }
+            exportButton.SetEnabled(true);
         }
 
         T CreateUIElement<T>(VisualElement root, System.Action<T> callback = null)
@@ -83,59 +177,12 @@ namespace SimpleObjectPort.Editor
             return newElement;
         }
 
-        void HandleObjectSelection(ChangeEvent<Object> selectedEvent)
+        TextField CreateTextField(VisualElement root, string label)
         {
-            try
-            {
-                objectValue = (ScriptableObject)selectedEvent.newValue;
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError("Could not cast selected objectField to ScriptableObject.");
-                Debug.LogException(ex);
-                return;
-            }
-
-            if (objectValue == null)
-            {
-                exportButton.SetEnabled(false);
-                return;
-            }
-            exportButton.SetEnabled(true);
-        }
-
-        void ExportObject()
-        {
-            if (!EditorUtility.DisplayDialog("Export Object", "This will create a file and open the explorer. Continue?", "Yes", "No"))
-                return;
-
-            var savedFilePath = "";
-            bool openFolderAfterSave = explorerOnExportToggle.value;
-            try
-            {
-                savedFilePath = ObjectPort.Save(objectValue, openFolderAfterSave: openFolderAfterSave);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"Failed to save file");
-                Debug.LogWarning(e.Message);
-            }
-
-            if (openFolderAfterSave && !string.IsNullOrEmpty(savedFilePath))
-                System.Diagnostics.Process.Start(Path.GetDirectoryName(savedFilePath));
-        }
-
-        void ImportObject()
-        {
-            if (!EditorUtility.DisplayDialog("Import Object", "This will prompt you to select a file and will then create an asset. Continue?", "Yes", "No"))
-                return;
-
-            var filePath = EditorUtility.OpenFilePanelWithFilters(
-                "Import Object",
-                directory: "",
-                new string[] { "JSON", "json", "All files", "*"});
-
-            // TODO
+            // text field constructor with label, setting field.label has no effect
+            var textField = new TextField(label);
+            root.Add(textField);
+            return textField;
         }
     }
 }
