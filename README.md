@@ -2,7 +2,7 @@
 
 A simple implementation of an object serialization system for Unity3D. Serializes Unity objects to JSON files using EditorJsonUtility (in editor) or JsonUtility (runtime). Includes a custom editor window for exporting and importing ScriptableObject assets via GUI.
 
-Last tested on Unity 6.3
+Last tested on Unity 6.4
 
 ## Dependencies
 - [UniTask](https://github.com/cysharp/UniTask)
