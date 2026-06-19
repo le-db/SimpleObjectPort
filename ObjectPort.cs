@@ -4,7 +4,6 @@ using System.Text;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using UnityEngine;
 
 namespace SimpleObjectPort
 {
@@ -31,7 +30,7 @@ namespace SimpleObjectPort
         /// <param name="saveDir">directory to save in</param>
         /// <param name="openFolderAfterSave">whether to open the system file explorer after saving</param>
         /// <returns>absolute filepath to saved file</returns>
-        public static async UniTask<string> Save(Object obj, string saveDir = "", bool openFolderAfterSave = true)
+        public static async UniTask<string> Save(UnityEngine.Object obj, string saveDir = "", bool openFolderAfterSave = true)
         {
             var fileName = $"{obj.name}.json";
             var usedFilePath = await Save(
@@ -59,7 +58,7 @@ namespace SimpleObjectPort
         public static async UniTask<string> Save<T>(T data, string saveDir, string fileName, bool useCachePath = true)
         {
             var usedFileDir = useCachePath
-                ? Path.Combine(Application.temporaryCachePath, saveDir)
+                ? Path.Combine(UnityEngine.Application.temporaryCachePath, saveDir)
                 : saveDir;
             var usedFilePath = Path.Combine(usedFileDir, fileName);
 
