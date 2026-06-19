@@ -71,7 +71,7 @@ namespace SimpleObjectPort
 #if UNITY_EDITOR
                 = EditorJsonUtility.ToJson(data, prettyPrint);
 #else
-                = JsonUtility.ToJson(data, prettyPrint);
+                = UnityEngine.JsonUtility.ToJson(data, prettyPrint);
 #endif
             var jsonByte = Encoding.UTF8.GetBytes(jsonData);
             await File.WriteAllBytesAsync(usedFilePath, jsonByte).AsUniTask();
